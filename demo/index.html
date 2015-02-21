@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en" ng-app="app">
+<head>
+	<meta charset="UTF-8">
+	<title>Demo reCAPTCHA</title>
+	<script src='https://www.google.com/recaptcha/api.js'></script>
+	<link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.3/css/bootstrap.min.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.2.9/angular.js"></script>
+    <script src="../recaptchangular.js"></script>
+    <style>
+
+        .input-group-addon { 
+            width: 70px; 
+        }
+
+        .input-group { 
+            width: 100%;
+        }
+
+        .container{
+            max-width: 800px;
+        }
+
+        .form-group {
+            margin-bottom: 30px;
+        }
+
+    </style>
+</head>
+
+<body data-ng-controller="AppCtrl">
+
+    <div class="container">
+        <h1><b>USER ACCOUNT</b></h1>
+        <div class="alert alert-success" data-ng-show="showdialog">
+            <button type="button" class="close" ng-click="showdialog=false" data-dismiss="alert" aria-hidden="true">&times;</button>
+            <strong>Yeah, you've submitted the form.</strong>
+            <br />Now you have to validate the user response on your server. <a href="https://developers.google.com/recaptcha/docs/verify" target="_blank">Here is how</a>, or if you're using JAX-RS, take a look at <a href="">jaxrs-recaptcha</a>
+        </div>
+        <form name="registerForm" role="form" ng-submit="register()">
+            <div class="form-group">
+                <div class="input-group col-md-7">
+                      <span class="input-group-addon">Name</span>
+                      <input class="form-control" type="text" data-ng-model="user.name" required>
+                </div>
+            </div>
+            <div class="form-group">
+                <div class="input-group col-md-7">
+                    <span class="input-group-addon">Email</span>
+                    <input class="form-control" type="text" data-ng-model="user.email" required>
+                </div>
+            </div>
+            <div class="form-group">
+                <div class="input-group col-md-7">
+                  <span class="input-group-addon">City</span>
+                  <input class="form-control" type="text" data-ng-model="user.city" required>
+                </div>
+            </div>
+            <div re-captcha ng-model="captcha" required></div> </br>
+            <button type="submit" ng-disabled="registerForm.$invalid" class="btn btn-primary">Create new Account</button>
+        </form>
+    </div>
+
+    <div class="container">
+        <h2>Scope output</h2>
+        <pre>
+            {{user | json}},
+            captcha: {{captcha}}
+        </pre>
+    </div>
+
+	
+	<script>
+
+		angular.module('app', ['recaptchangular'])
+
+			.config(['RecaptchangularProvider', function (Provider) {
+
+                Provider.withTheme('light').withSiteKey('6LdcHAITAAAAAECOQW8m6N3T8DIwnaP6kydWsxE2');
+
+			}])
+
+			.controller('AppCtrl', function ($scope) {
+
+                $scope.user = {};
+                $scope.showdialog = false;
+
+                $scope.register = function () {
+                    if($scope.registerForm.$valid) {
+                        $scope.showdialog = true;
+                    }
+                }
+           })
+
+	</script>
+</body>
+</html>
