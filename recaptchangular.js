@@ -1,37 +1,49 @@
-/**
- * angular-recaptcha build:2015-01-09 
- * https://github.com/vividcortex/angular-recaptcha 
- * Copyright (c) 2015 VividCortex 
-**/
+;( function ( angular, undefined ) {
 
-/*global angular, Recaptcha */
-(function (ng) {
-    'use strict';
+    var recaptchangular = angular.module('recaptchangular', []);
 
-    ng.module('vcRecaptcha', []);
+    recaptchangular.provider('Recaptchangular', [function () {
 
-}(angular));
+        var theme = 'light';
 
-/*global angular */
-(function (ng) {
-    'use strict';
+        var siteKey;
 
-    var app = ng.module('vcRecaptcha');
-
-    /**
-     * An angular service to wrap the reCaptcha API
-     */
-    app.service('vcRecaptchaService', ['$window', '$q', function ($window, $q) {
-        var deferred = $q.defer(), promise = deferred.promise, recaptcha;
-
-        $window.vcRecapthaApiLoaded = function () {
-            recaptcha = $window.grecaptcha;
-
-            deferred.resolve(recaptcha);
+        this.withTheme = function (theme_) {
+            theme = theme_;
+            return this;
         };
 
+        this.withSiteKey = function (key) {
+            siteKey = key;
+        };
 
-        function getRecaptcha() {
+        this.$get = [function () {
+
+            return {
+                getTheme: function () {
+                    return theme;
+                },
+                getSiteKey: function () {
+                    return siteKey;
+                }
+            };
+
+        }];
+
+    }]);
+
+    recaptchangular.service('RecaptchaService', ['$window', '$q', function ($window, $q) {
+
+        var deferred = $q.defer();
+        var promise = deferred.promise;
+        var recaptcha;
+
+        function recaptchaAPILoaded () {
+            recaptcha = $window.grecaptcha;
+            deferred.resolve(recaptcha);            
+        }
+
+        function getRecaptcha () {
             if (!!recaptcha) {
                 return $q.when(recaptcha);
             }
@@ -39,147 +51,68 @@
             return promise;
         }
 
-        function validateRecaptchaInstance() {
-            if (!recaptcha) {
-                throw new Error('reCaptcha has not been loaded yet.');
-            }
-        }
-
-
-        // Check if grecaptcha is not defined already.
-        if (ng.isDefined($window.grecaptcha)) {
-            $window.vcRecapthaApiLoaded();
+        if (angular.isDefined($window.grecaptcha)) {
+            recaptchaAPILoaded();
         }
 
         return {
 
-            /**
-             * Creates a new reCaptcha object
-             *
-             * @param elm  the DOM element where to put the captcha
-             * @param key  the recaptcha public key (refer to the README file if you don't know what this is)
-             * @param fn   a callback function to call when the captcha is resolved
-             * @param conf the captcha object configuration
-             */
-            create: function (elm, key, fn, conf) {
-                conf.callback = fn;
-                conf.sitekey = key;
+            create: function (elm, key, theme, callback) {
+
+                var config = {
+                    sitekey: key,
+                    theme: theme,
+                    callback: callback
+                };
 
                 return getRecaptcha().then(function (recaptcha) {
-                    return recaptcha.render(elm, conf);
+                    return recaptcha.render(elm, config);
                 });
-            },
-
-            /**
-             * Reloads the reCaptcha
-             */
-            reload: function (widgetId) {
-                validateRecaptchaInstance();
-
-                // $log.info('Reloading captcha');
-                recaptcha.reset(widgetId);
-
-                // reCaptcha will call the same callback provided to the
-                // create function once this new captcha is resolved.
-            },
-
-            /**
-             * Gets the response from the reCaptcha widget.
-             *
-             * @see https://developers.google.com/recaptcha/docs/display#js_api
-             *
-             * @returns {String}
-             */
-            getResponse: function (widgetId) {
-                validateRecaptchaInstance();
-
-                return recaptcha.getResponse(widgetId);
             }
+
         };
 
     }]);
 
-}(angular));
-
-/*global angular, Recaptcha */
-(function (ng) {
-    'use strict';
-
-    function throwNoKeyException() {
-        throw new Error('You need to set the "key" attribute to your public reCaptcha key. If you don\'t have a key, please get one from https://www.google.com/recaptcha/admin/create');
-    }
-
-    var app = ng.module('vcRecaptcha');
-
-    app.directive('vcRecaptcha', ['$timeout', 'vcRecaptchaService', function ($timeout, vcRecaptcha) {
+    recaptchangular.directive('reCaptcha', ['Recaptchangular', 'RecaptchaService', '$timeout', function (Recaptchangular, RecaptchaService, $timeout) {
 
         return {
+
             restrict: 'A',
-            require: "?^^form",
+            require: 'ngModel',
             scope: {
-                response: '=?ngModel',
-                key: '=',
-                theme: '=?',
-                onCreate: '&',
-                onSuccess: '&',
-                onExpire: '&'
+                ngModel: '=',
+                theme: '='
             },
+
             link: function (scope, elm, attrs, ctrl) {
-                if (!attrs.hasOwnProperty('key')) {
-                    throwNoKeyException();
-                }
 
-                scope.widgetId = null;
+                var timeoutId;
+                var timeExpires = 2 * 60 * 1000;
 
-                var removeCreationListener = scope.$watch('key', function (key) {
-                    if (!key) {
-                        return;
-                    }
+                var theme = scope.theme || Recaptchangular.getTheme();
+                var key = Recaptchangular.getSiteKey();
+                var local = elm[0];
 
-                    if (key.length !== 40) {
-                        throwNoKeyException();
-                    }
+                var promise = RecaptchaService.create(local, key, theme, function (grecaptchaResponse) {
 
-                    var callback = function (gRecaptchaResponse) {
-                        // Safe $apply
-                        $timeout(function () {
-                            if(ctrl){
-                                ctrl.$setValidity('recaptcha',true);
-                            }
-                            scope.response = gRecaptchaResponse;
-                            // Notify about the response availability
-                            scope.onSuccess({response: gRecaptchaResponse, widgetId: scope.widgetId});
-                        });
+                    scope.ngModel = grecaptchaResponse;
+                    scope.$apply();
 
-                        // captcha session lasts 2 mins after set.
-                        $timeout(function (){
-                            if(ctrl){
-                                ctrl.$setValidity('recaptcha',false);
-                            }
-                            scope.response = "";
-                            // Notify about the response availability
-                            scope.onExpire({widgetId: scope.widgetId});
-                        }, 2 * 60 * 1000);
-                    };
+                    timeoutId = $timeout(function () {
+                        scope.ngModel = null;
+                    }, timeExpires);
 
-                    vcRecaptcha.create(elm[0], key, callback, {
-
-                        theme: scope.theme || attrs.theme || null
-
-                    }).then(function (widgetId) {
-                        // The widget has been created
-                        if(ctrl){
-                            ctrl.$setValidity('recaptcha',false);
-                        }
-                        scope.widgetId = widgetId;
-                        scope.onCreate({widgetId: widgetId});
-                    });
-
-                    // Remove this listener to avoid creating the widget more than once.
-                    removeCreationListener();
                 });
+
+                scope.$on('destroy', function () {
+                    $timeout.cancel(timeoutId); //TODO: test
+                });
+
             }
+
         };
+
     }]);
 
-}(angular));
+}) (angular);
